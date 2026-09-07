@@ -1,0 +1,86 @@
+{
+  "manifest_version": 3,
+  "name": "FB Post & Comments Scraper - Cào Bài Viết & Bình Luận FB",
+  "version": "1.0.0",
+  "description": "Tự động cào nội dung bài viết và toàn bộ bình luận/phản hồi Facebook từ đường link. Hỗ trợ xuất JSON và CSV UTF-8.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "FB Post & Comments Scraper",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "downloads",
+    "tabs"
+  ],
+  "host_permissions": [
+    "*://*.facebook.com/*",
+    "*://*.fb.com/*",
+    "*://*.fb.watch/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "options_ui": {
+    "page": "dashboard/dashboard.html",
+    "open_in_tab": true
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.facebook.com/*",
+        "*://*.fb.com/*",
+        "*://*.fb.watch/*"
+      ],
+      "js": [
+        "content/page-unthrottler.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "*://*.facebook.com/*",
+        "*://*.fb.com/*",
+        "*://*.fb.watch/*"
+      ],
+      "js": [
+        "utils/exporter.js",
+        "content/dom-selectors.js",
+        "content/crawler-engine.js",
+        "content/hud-widget.js",
+        "content/content.js"
+      ],
+      "css": [
+        "content/hud-widget.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "icons/*.png",
+        "content/page-unthrottler.js",
+        "content/hud-widget.css",
+        "dashboard/*"
+      ],
+      "matches": [
+        "*://*.facebook.com/*",
+        "*://*.fb.com/*",
+        "*://*.fb.watch/*"
+      ]
+    }
+  ]
+}

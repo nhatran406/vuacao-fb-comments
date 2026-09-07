@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FB Post & Comments Scraper</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header -->
+    <header class="popup-header">
+      <div class="header-branding">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/></svg>
+        </div>
+        <div>
+          <h1 class="brand-title">FB Scraper Pro</h1>
+          <p class="brand-subtitle">Cào bài viết & bình luận Facebook</p>
+        </div>
+      </div>
+      <span class="version-tag">v1.0</span>
+    </header>
+
+    <!-- Launch Dashboard Banner -->
+    <div class="dashboard-banner">
+      <div class="dashboard-banner-text">
+        <span class="dashboard-banner-title">🚀 Quản Lý Nhiều Bài Viết</span>
+        <span class="dashboard-banner-sub">Cào nhiều link FB đồng thời</span>
+      </div>
+      <button id="btn-launch-dashboard" class="btn btn-primary btn-sm">
+        Mở Dashboard ↗
+      </button>
+    </div>
+
+    <!-- Main Body -->
+    <main class="popup-body">
+      <!-- URL Input Section -->
+      <section class="section-card">
+        <label class="field-label" for="post-url-input">
+          <svg viewBox="0 0 24 24" class="inline-icon"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>
+          Đường dẫn bài viết Facebook:
+        </label>
+        <div class="url-input-group">
+          <input type="url" id="post-url-input" placeholder="https://www.facebook.com/.../posts/..." />
+          <button id="btn-open-crawl" class="btn btn-secondary" title="Mở link trong tab mới và bắt đầu cào">Mở & Cào</button>
+        </div>
+      </section>
+
+      <!-- Active Tab Post Status -->
+      <section class="section-card" id="post-info-card">
+        <div class="post-header-info">
+          <span class="post-author" id="display-post-author">Chưa phát hiện bài viết</span>
+          <span class="badge badge-info" id="display-post-status">Chờ bắt đầu</span>
+        </div>
+        <p class="post-snippet" id="display-post-snippet">Mở một bài viết Facebook hoặc nhập link phía trên để quét dữ liệu.</p>
+      </section>
+
+      <!-- Statistics Grid -->
+      <section class="stats-row">
+        <div class="stat-card">
+          <div class="stat-val" id="stat-total-comments">0</div>
+          <div class="stat-lbl">Tổng bình luận</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="stat-total-threads">0</div>
+          <div class="stat-lbl">Bình luận cha</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="stat-total-replies">0</div>
+          <div class="stat-lbl">Phản hồi (Sub)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="stat-reactions">0</div>
+          <div class="stat-lbl">Tương tác post</div>
+        </div>
+      </section>
+
+      <!-- Activity Log Bar -->
+      <div class="status-banner" id="status-banner">
+        <div class="spinner" id="status-spinner" style="display: none;"></div>
+        <span id="status-message">Sẵn sàng thực hiện.</span>
+      </div>
+
+      <!-- Action Primary Buttons -->
+      <div class="actions-stack">
+        <button id="btn-start" class="btn btn-primary btn-block">
+          ▶ Bắt Đầu Cào Trên Tab Này
+        </button>
+        <div class="btn-group-dual" id="running-controls" style="display: none;">
+          <button id="btn-pause" class="btn btn-warning">⏸ Tạm Dừng</button>
+          <button id="btn-stop" class="btn btn-danger">⏹ Dừng</button>
+        </div>
+      </div>
+
+      <!-- Export Actions -->
+      <div class="export-grid">
+        <button id="btn-export-csv" class="btn btn-export" disabled>
+          📊 Xuất CSV (Excel UTF-8)
+        </button>
+        <button id="btn-export-json" class="btn btn-export" disabled>
+          📄 Xuất JSON
+        </button>
+        <button id="btn-copy" class="btn btn-export" disabled>
+          📋 Copy Dữ Liệu
+        </button>
+        <button id="btn-toggle-hud" class="btn btn-export">
+          🖥 Hiện Widget Nổi
+        </button>
+      </div>
+
+      <!-- Settings Collapsible -->
+      <details class="settings-details">
+        <summary class="settings-summary">⚙ Cấu hình & Tùy chọn nâng cao</summary>
+        <div class="settings-body">
+          <div class="setting-item">
+            <label for="cfg-auto-filter">Tự động chọn "Tất cả bình luận"</label>
+            <input type="checkbox" id="cfg-auto-filter" checked />
+          </div>
+          <div class="setting-item">
+            <label for="cfg-expand-replies">Tự động mở rộng phản hồi (sub-comments)</label>
+            <input type="checkbox" id="cfg-expand-replies" checked />
+          </div>
+          <div class="setting-item">
+            <label for="cfg-max-comments">Giới hạn số bình luận (0 = tất cả):</label>
+            <input type="number" id="cfg-max-comments" value="0" min="0" step="50" style="width: 70px;" />
+          </div>
+          <div class="setting-item">
+            <label for="cfg-delay">Đệm nạp nội dung (Buffer):</label>
+            <select id="cfg-delay">
+              <option value="800">Nhanh (800ms)</option>
+              <option value="1200" selected>Tối ưu (1200ms)</option>
+              <option value="1800">An toàn (1800ms)</option>
+            </select>
+          </div>
+        </div>
+      </details>
+    </main>
+
+    <!-- Footer -->
+    <footer class="popup-footer">
+      <span>Facebook Post & Comments Scraper</span>
+      <a href="https://facebook.com" target="_blank" class="footer-link">Mở Facebook</a>
+    </footer>
+  </div>
+
+  <script src="../utils/exporter.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
