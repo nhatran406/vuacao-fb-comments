@@ -169,15 +169,39 @@ const groupsContainer = document.getElementById('jobs-groups-container');
     if (badgeJobsCount) badgeJobsCount.innerText = `${total} jobs`;
   }
 
+  function mergeJobsPreservingData(incomingJobs) {
+    const oldMap = new Map(jobsList.map(j => [j.id, j]));
+    const seenIds = new Set();
+    return incomingJobs.filter(j => {
+      if (!j || !j.id || seenIds.has(j.id)) return false;
+      seenIds.add(j.id);
+      return true;
+    }).map(newJob => {
+      const old = oldMap.get(newJob.id);
+      if (old && old.resultData) {
+        if (!newJob.resultData) {
+          newJob.resultData = old.resultData;
+        } else {
+          if (old.resultData.sentimentStats && !newJob.resultData.sentimentStats) {
+            newJob.resultData.sentimentStats = old.resultData.sentimentStats;
+          }
+          if (old.resultData.comments && (!newJob.resultData.comments || newJob.resultData.comments.length === 0)) {
+            newJob.resultData.comments = old.resultData.comments;
+          }
+        }
+      }
+      return newJob;
+    });
+  }
+
   function fetchAndRenderJobs() {
     chrome.runtime.sendMessage({ action: 'GET_ALL_JOBS' }, (res) => {
       if (res && res.jobs) {
-        const seenIds = new Set();
-        jobsList = res.jobs.filter(j => {
-          if (!j || !j.id || seenIds.has(j.id)) return false;
-          seenIds.add(j.id);
-          return true;
-        });
+        jobsList = mergeJobsPreservingData(res.jobs);
+        renderJobsTable();
+        updateMetrics();
+      } else if (window.__SAMPLE_JOBS__ && jobsList.length === 0) {
+        jobsList = window.__SAMPLE_JOBS__;
         renderJobsTable();
         updateMetrics();
       }
@@ -187,29 +211,12 @@ const groupsContainer = document.getElementById('jobs-groups-container');
   function fetchJobsQuietly() {
     chrome.runtime.sendMessage({ action: 'GET_ALL_JOBS' }, (res) => {
       if (res && res.jobs) {
-        const seenIds = new Set();
-        jobsList = res.jobs.filter(j => {
-          if (!j || !j.id || seenIds.has(j.id)) return false;
-          seenIds.add(j.id);
-          return true;
-        });
+        jobsList = mergeJobsPreservingData(res.jobs);
         updateMetrics();
         jobsList.forEach(j => updateRowElement(j));
       }
     });
   }
-
-  // 1. Initial load
-  fetchAndRenderJobs();
-
-  // 2. Listen for live updates from background worker
-  chrome.runtime.onMessage.addListener((message) => {
-    if (message && message.type === 'JOB_UPDATED' && message.job) {
-      addOrUpdateJobInList(message.job);
-    }
-  });
-
-  // Polling fallback every 2.5s for ultra consistency
   setInterval(() => {
     fetchJobsQuietly();
   }, 2500);
@@ -287,12 +294,9 @@ const groupsContainer = document.getElementById('jobs-groups-container');
         <table class="jobs-table">
           <thead>
             <tr>
-              <th style="width: 130px;">Trạng Thái</th>
-              <th>Bài Viết / Tác Giả</th>
-              <th style="width: 140px;">Bình Luận</th>
-              <th style="width: 200px;">Tiến Trình</th>
-              <th style="width: 120px;">Thời Gian</th>
-              <th style="width: 260px; text-align: right;">Thao Tác</th>
+              <th class="th-post-info">Bài Viết & Nội Dung</th>
+              <th class="th-progress-metrics">Tiến Độ & Sắc Thái AI</th>
+              <th class="th-actions">Thao Tác</th>
             </tr>
           </thead>
           <tbody class="group-jobs-tbody">
@@ -321,6 +325,13 @@ const groupsContainer = document.getElementById('jobs-groups-container');
         if (window.SentimentAnalyzer) {
           completedWithData.forEach(j => {
             window.SentimentAnalyzer.analyze(j.resultData);
+            if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+              chrome.runtime.sendMessage({
+                action: 'UPDATE_JOB_DATA',
+                jobId: j.id,
+                resultData: j.resultData
+              });
+            }
           });
           chrome.storage.local.set({ fb_jobs: jobsList });
           // Cập nhật giao diện từng row
@@ -402,30 +413,29 @@ const groupsContainer = document.getElementById('jobs-groups-container');
     const repCmt = prog.totalReplies || job.resultData?.stats?.totalReplies || 0;
     const expCmt = prog.expectedComments || job.resultData?.stats?.expectedComments || 0;
 
-    let statusBadge = '';
-    let spinnerHtml = '';
-
     const pct = (expCmt > 0) ? Math.min(100, Math.round((totalCmt / expCmt) * 100)) : 100;
     const isTargetReached = (expCmt > 0 && totalCmt >= expCmt);
-    const isVirtuallyComplete = isTargetReached || (job.status === 'COMPLETED' && pct >= 85);
+    const isVirtuallyComplete = isTargetReached || (job.status === "COMPLETED" && pct >= 85);
 
-    if (job.status === 'RUNNING' || job.status === 'STARTING') {
+    let statusBadge = "";
+    let spinnerHtml = "";
+
+    if (job.status === "RUNNING" || job.status === "STARTING") {
       statusBadge = '<span class="badge badge-running">⚡ Đang cào...</span>';
       spinnerHtml = '<div class="spinner-sm"></div>';
-    } else if (job.status === 'WAITING') {
+    } else if (job.status === "WAITING") {
       statusBadge = '<span class="badge badge-waiting">⏳ Đang chờ</span>';
-      spinnerHtml = '<div class="spinner-sm" style="border-top-color: #d97706;"></div>';
-    } else if (job.status === 'COMPLETED') {
-      statusBadge = isTargetReached ? '<span class="badge badge-completed">✓ Đủ 100%</span>' : `<span class="badge badge-completed">✓ Đạt ${pct}%</span>`;
-    } else if (job.status === 'STOPPED') {
+      spinnerHtml = '<div class="spinner-sm" style="border-top-color: #fbbf24;"></div>';
+    } else if (job.status === "COMPLETED") {
+      statusBadge = isTargetReached ? '<span class="badge badge-completed">✓ Đạt 100%</span>' : `<span class="badge badge-completed">✓ Đạt ${pct}%</span>`;
+    } else if (job.status === "STOPPED") {
       statusBadge = '<span class="badge badge-stopped">⏹ Đã dừng</span>';
     } else {
       statusBadge = `<span class="badge badge-error">✕ ${job.status}</span>`;
     }
 
-    
     function formatDuration(ms) {
-      if (!ms || ms < 0) return '0s';
+      if (!ms || ms < 0) return "0s";
       const sec = Math.floor(ms / 1000);
       if (sec < 60) return `${sec}s`;
       const min = Math.floor(sec / 60);
@@ -434,85 +444,175 @@ const groupsContainer = document.getElementById('jobs-groups-container');
     }
 
     const startTime = job.startedAt || (job.createdAt ? new Date(job.createdAt).getTime() : Date.now());
-    let durationText = '';
+    let durationBadge = "";
 
-    if (job.status === 'COMPLETED' || job.status === 'STOPPED') {
+    if (job.status === "COMPLETED" || job.status === "STOPPED") {
       const endTime = job.completedAt || Date.now();
       const diff = Math.max(0, endTime - startTime);
-      durationText = `<div style="font-weight: 600; color: #059669;">⏱ Xong trong: ${formatDuration(diff)}</div>`;
-    } else if (job.status === 'RUNNING' || job.status === 'STARTING') {
+      durationBadge = `<span class="runtime-badge runtime-done" title="Thời gian cào hoàn tất">⏱ ${formatDuration(diff)}</span>`;
+    } else if (job.status === "RUNNING" || job.status === "STARTING") {
       const diff = Math.max(0, Date.now() - startTime);
-      durationText = `<div style="font-weight: 600; color: #d97706;">⏳ Đang cào: ${formatDuration(diff)}</div>`;
+      durationBadge = `<span class="runtime-badge runtime-live" title="Đang cào dữ liệu">⏳ ${formatDuration(diff)}</span>`;
     } else {
-      durationText = `<div style="color: #64748b;">⏳ Đang chờ</div>`;
+      durationBadge = '<span class="runtime-badge runtime-waiting">⏳ Đang chờ</span>';
     }
 
-    const createdTimeFormatted = job.createdAt ? new Date(job.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+    const createdTimeFormatted = job.createdAt ? new Date(job.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
 
+    function displayShortUrl(url) {
+      if (!url) return "facebook.com/...";
+      try {
+        const u = new URL(url);
+        const pathParts = u.pathname.split("/").filter(Boolean);
+        if (pathParts.length >= 2) {
+          return `${u.hostname}/${pathParts.slice(0, 3).join("/")}`;
+        }
+        return u.hostname + u.pathname;
+      } catch (e) {
+        return url.length > 32 ? url.substring(0, 30) + "..." : url;
+      }
+    }
 
     const hasData = (job.resultData && job.resultData.comments?.length > 0) || totalCmt > 0;
 
-    let sentimentHtml = '';
-    if (job.resultData && job.resultData.sentimentStats) {
+    let sentimentHtml = "";
+    const isAnalyzed = Boolean(job.resultData && job.resultData.sentimentStats);
+    if (isAnalyzed) {
       const s = job.resultData.sentimentStats;
-      sentimentHtml = `<div style="font-size: 11px; margin-top: 4px; display:flex; gap: 4px;">
-        <span style="color: #16a34a;" title="Tích cực">😊 ${s.POSITIVE}</span>
-        <span style="color: #dc2626;" title="Tiêu cực">😡 ${s.NEGATIVE}</span>
-        <span style="color: #64748b;" title="Bình thường">😐 ${s.NORMAL}</span>
-      </div>`;
+      const totalS = (s.POSITIVE || 0) + (s.NEGATIVE || 0) + (s.NORMAL || 0);
+      const posPct = totalS > 0 ? Math.round((s.POSITIVE / totalS) * 100) : 0;
+      const negPct = totalS > 0 ? Math.round((s.NEGATIVE / totalS) * 100) : 0;
+      const normPct = totalS > 0 ? Math.max(0, 100 - posPct - negPct) : 0;
+
+      let verdictCls = 'verdict-norm';
+      let verdictIcon = '😐';
+      let verdictLabel = 'Trung tính';
+      let verdictPct = normPct;
+
+      if (posPct >= 50 || (s.POSITIVE > s.NEGATIVE && posPct >= 40)) {
+        verdictCls = 'verdict-pos';
+        verdictIcon = '😊';
+        verdictLabel = 'Tích cực';
+        verdictPct = posPct;
+      } else if (negPct >= 35 || (s.NEGATIVE > s.POSITIVE && negPct >= 28)) {
+        verdictCls = 'verdict-neg';
+        verdictIcon = '😡';
+        verdictLabel = 'Tiêu cực / Lái';
+        verdictPct = negPct;
+      } else if (posPct > negPct && posPct > normPct) {
+        verdictCls = 'verdict-pos';
+        verdictIcon = '😊';
+        verdictLabel = 'Nghiêng tốt';
+        verdictPct = posPct;
+      }
+
+      sentimentHtml = `
+        <div class="sentiment-pill-group" title="Tổng hợp phân tích AI (${totalS} bình luận): ${posPct}% Tích cực (${s.POSITIVE || 0}), ${negPct}% Tiêu cực (${s.NEGATIVE || 0}), ${normPct}% Bình thường (${s.NORMAL || 0}) • Bấm để xem chi tiết">
+          <span class="sentiment-verdict ${verdictCls}">
+            <span class="verdict-icon">${verdictIcon}</span>
+            <span class="verdict-label">${verdictLabel}</span>
+            <strong class="verdict-pct">${verdictPct}%</strong>
+          </span>
+          <div class="sentiment-counts">
+            <span class="sentiment-pill-item sentiment-pos" title="Tích cực: ${s.POSITIVE || 0} (${posPct}%)">😊 ${s.POSITIVE || 0}</span>
+            <span class="sentiment-pill-item sentiment-neg" title="Tiêu cực / Lái: ${s.NEGATIVE || 0} (${negPct}%)">😡 ${s.NEGATIVE || 0}</span>
+            <span class="sentiment-pill-item sentiment-norm" title="Bình thường: ${s.NORMAL || 0} (${normPct}%)">😐 ${s.NORMAL || 0}</span>
+          </div>
+        </div>
+      `;
+    } else {
+      sentimentHtml = '<span class="sentiment-unrated" title="Bấm nút 🧠 AI Phân Tích bên cạnh để quét sắc thái toàn bộ bình luận">Chưa phân tích AI</span>';
     }
 
     let displayCmtMetric = `${totalCmt}`;
-    let subMetricText = `${topCmt} cha, ${repCmt} con`;
+    let subMetricText = `${topCmt} gốc • ${repCmt} phản hồi`;
     if (expCmt > 0) {
       displayCmtMetric = `${totalCmt} / ${expCmt}`;
-      subMetricText = `${topCmt} cha, ${repCmt} con (${pct}%)`;
+      subMetricText = `${topCmt} gốc • ${repCmt} phản hồi (${pct}%)`;
     }
 
-    const metricTooltip = (expCmt > 0 && totalCmt < expCmt && job.status === 'COMPLETED')
-      ? 'Đã thu thập đầy đủ mọi bình luận Facebook hiển thị. Phần chênh lệch là bình luận đã bị người dùng xóa hoặc Facebook tự động ẩn do bộ lọc spam.'
-      : 'Tổng số bình luận thu thập';
+    const metricTooltip = (expCmt > 0 && totalCmt < expCmt && job.status === "COMPLETED")
+      ? "Đã thu thập đầy đủ mọi bình luận Facebook hiển thị. Bấm vào để xem chi tiết danh sách bình luận."
+      : "Bấm vào để xem chi tiết danh sách bình luận";
 
-    const isLoginError = (prog.statusMessage || '').toLowerCase().includes('đăng nhập') || (prog.statusMessage || '').toLowerCase().includes('login');
+    const isLoginError = (prog.statusMessage || "").toLowerCase().includes("đăng nhập") || (prog.statusMessage || "").toLowerCase().includes("login");
 
+    tr.className = "job-table-row";
     tr.innerHTML = `
-      <td>${statusBadge}</td>
-      <td>
-        <span class="job-author">👤 ${prog.postAuthor || 'Facebook Post'}</span>
-        <div style="display: flex; align-items: center; gap: 6px; margin: 3px 0;">
-          <a href="${job.url}" target="_blank" class="job-url-link" style="color: #1877f2; font-weight: 500; text-decoration: none;" title="${job.url}">🔗 ${job.url}</a>
-          <button class="btn-copy-url" data-url="${job.url}" title="Copy link bài viết" style="border: 1px solid #cbd5e1; background: #f8fafc; border-radius: 4px; padding: 1px 5px; font-size: 10px; cursor: pointer;">📋 Copy</button>
-        </div>
-        <div class="job-text-snippet" title="${prog.postText || ''}">${prog.postText || 'Chưa nạp nội dung...'}</div>
-      </td>
-      <td>
-        <div class="comment-metric-pill ${isVirtuallyComplete ? 'pill-success' : ''}" title="${metricTooltip}">${displayCmtMetric}</div>
-        <div class="comment-metric-sub" title="${metricTooltip}">${subMetricText}</div>
-        ${sentimentHtml}
-      </td>
-      <td>
-        <div class="progress-status-text" title="${prog.statusMessage || ''}" style="${isLoginError ? 'color: #dc2626; font-weight: 600;' : ''}">
-          ${spinnerHtml}${prog.statusMessage || 'Đang xử lý...'}
-        </div>
-        ${isLoginError ? `<button class="btn btn-warning-sm btn-login-retry" data-id="${job.id}" style="margin-top: 6px; font-size: 11px; padding: 2px 8px; cursor: pointer;">🔑 Đăng nhập FB & Cào lại</button>` : ''}
-      </td>
-      <td>
-        <div style="font-size: 11.5px; line-height: 1.4;">
-          ${durationText}
-          <div style="font-size: 10.5px; color: #94a3b8;">Bắt đầu: ${createdTimeFormatted}</div>
+      <!-- CỘT 1: BÀI VIẾT & TÁC GIẢ -->
+      <td class="col-post-main">
+        <div class="job-item-card-inner">
+          <div class="job-meta-header">
+            <div class="job-author-badge">
+              <span class="author-icon">👤</span>
+              <strong class="job-author" title="${prog.postAuthor || "Facebook Post"}">${prog.postAuthor || "Facebook Post"}</strong>
+            </div>
+            <div class="job-link-wrapper">
+              <a href="${job.url}" target="_blank" class="job-url-link" title="${job.url}">
+                <span class="link-icon">🔗</span>
+                <span class="url-text">${displayShortUrl(job.url)}</span>
+              </a>
+              <button class="btn-copy-url" data-url="${job.url}" title="Copy link bài viết">📋 Copy</button>
+            </div>
+            <span class="job-time-tag" title="Thời điểm bắt đầu">🕐 ${createdTimeFormatted}</span>
+          </div>
+
+          <div class="job-snippet-card">
+            <p class="job-text-snippet" title="${prog.postText || ""}">${prog.postText || "Chưa nạp nội dung bài viết..."}</p>
+          </div>
         </div>
       </td>
-      <td>
-        <div class="row-actions">
-          <button class="btn-action-icon btn-csv" data-id="${job.id}" ${hasData ? '' : 'disabled'} title="Tải file CSV">📊 CSV</button>
-          <button class="btn-action-icon btn-json" data-id="${job.id}" ${hasData ? '' : 'disabled'} title="Tải file JSON">📄 JSON</button>
-          <button class="btn-action-icon btn-sentiment" data-id="${job.id}" ${hasData ? '' : 'disabled'} title="Phân tích sắc thái (Tích cực / Tiêu cực / Lái / Bơm tin)" style="background: #eef2ff; color: #4f46e5; border-color: #c7d2fe; font-weight: 600;">🧠 AI Phân Tích</button>
-          <button class="btn-action-icon btn-view" data-id="${job.id}" title="Xem tab này">👁 Tab</button>
-          ${(job.status === 'RUNNING' || job.status === 'STARTING' || job.status === 'WAITING') ?
-            `<button class="btn-action-icon btn-stop" data-id="${job.id}" title="Dừng cào">⏹</button>` :
-            `<button class="btn-action-icon btn-retry" data-id="${job.id}" title="Cào lại">🔄</button>`
-          }
-          <button class="btn-action-icon danger btn-delete" data-id="${job.id}" title="Xóa job">🗑</button>
+
+      <!-- CỘT 2: TIẾN ĐỘ & SẮC THÁI AI -->
+      <td class="col-progress-metrics">
+        <div class="metrics-card-inner">
+          <div class="metrics-tier-top">
+            <div class="status-duration-cluster">
+              ${statusBadge}
+              ${durationBadge}
+            </div>
+            <div class="comment-pill-cluster ${isVirtuallyComplete ? "pill-success" : ""}" title="${metricTooltip}">
+              <span class="cmt-icon">💬</span>
+              <span class="comment-metric-pill">${displayCmtMetric}</span>
+              <span class="comment-metric-sub">${subMetricText}</span>
+            </div>
+          </div>
+
+          <div class="metrics-tier-bottom">
+            <div class="progress-status-box" title="${prog.statusMessage || ""}">
+              ${spinnerHtml}
+              <span class="progress-status-text ${isLoginError ? "text-error" : ""}">${prog.statusMessage || "Đang xử lý..."}</span>
+              ${isLoginError ? `<button class="btn btn-warning-sm btn-login-retry" data-id="${job.id}">🔑 Đăng nhập FB</button>` : ""}
+            </div>
+            <div class="sentiment-box">
+              ${sentimentHtml}
+            </div>
+          </div>
+        </div>
+      </td>
+
+      <!-- CỘT 3: THAO TÁC -->
+      <td class="col-actions">
+        <div class="actions-card-inner">
+          <div class="actions-tier-main">
+            <button class="btn-action-primary btn-sentiment ${isAnalyzed ? "analyzed" : ""}" data-id="${job.id}" ${hasData ? "" : "disabled"} title="${isAnalyzed ? "Phân tích lại sắc thái AI" : "Phân tích sắc thái AI (Tích cực / Tiêu cực / Bình thường)"}">
+              <span class="btn-ai-sparkle">🧠</span>
+              <span>${isAnalyzed ? "Phân tích lại" : "AI Phân Tích"}</span>
+            </button>
+            <button class="btn-action-view btn-view" data-id="${job.id}" title="Mở tab bài viết này trên trình duyệt">
+              <span>👁 Tab</span>
+            </button>
+          </div>
+
+          <div class="actions-tier-sub">
+            <button class="btn-action-mini btn-csv" data-id="${job.id}" ${hasData ? "" : "disabled"} title="Tải file CSV (Excel UTF-8)">📊 CSV</button>
+            <button class="btn-action-mini btn-json" data-id="${job.id}" ${hasData ? "" : "disabled"} title="Tải file JSON">📄 JSON</button>
+            ${(job.status === "RUNNING" || job.status === "STARTING" || job.status === "WAITING") ?
+              `<button class="btn-action-mini btn-stop" data-id="${job.id}" title="Dừng cào bài này">⏹ Dừng</button>` :
+              `<button class="btn-action-mini btn-retry" data-id="${job.id}" title="Cào lại bài này">🔄 Cào lại</button>`
+            }
+            <button class="btn-action-mini danger btn-delete" data-id="${job.id}" title="Xóa tác vụ">🗑</button>
+          </div>
         </div>
       </td>
     `;
@@ -520,72 +620,159 @@ const groupsContainer = document.getElementById('jobs-groups-container');
     bindRowActions(tr, job);
   }
 
-  
-  function runSentiment(job) {
-    if (!job || !job.resultData) return;
+  function runSentiment(job, onFinish) {
+    if (!job || !job.resultData) {
+      if (onFinish) onFinish();
+      return;
+    }
     if (window.SentimentAnalyzer) {
-      window.SentimentAnalyzer.analyze(job.resultData);
-      // Lưu lại kết quả phân tích vào storage
-      chrome.storage.local.set({ fb_jobs: jobsList });
+      const stats = window.SentimentAnalyzer.analyze(job.resultData);
+      job.resultData.sentimentStats = stats;
+
+      // Đồng bộ ngay về background service worker
+      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        chrome.runtime.sendMessage({
+          action: 'UPDATE_JOB_DATA',
+          jobId: job.id,
+          resultData: job.resultData
+        }, () => {});
+      }
+
+      // Lưu trữ persistent
+      if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+        chrome.storage.local.set({ fb_jobs: jobsList });
+      }
+
+      // Cập nhật DOM ngay lập tức ra bảng (thay thế mục Chưa phân tích AI)
       updateRowElement(job);
-      openCommentsModal(job);
+      updateMetrics();
+
+      if (onFinish) onFinish();
     } else {
       console.warn("SentimentAnalyzer not loaded.");
+      if (onFinish) onFinish();
     }
   }
 
   function bindRowActions(tr, job) {
+    const sentimentBtn = tr.querySelector(".btn-sentiment");
+    const cmtCluster = tr.querySelector(".comment-pill-cluster");
+    const sentimentPillGroup = tr.querySelector(".sentiment-pill-group");
 
-    const sentimentBtn = tr.querySelector('.btn-sentiment');
-    const cmtPill = tr.querySelector('.comment-metric-pill');
-    if (cmtPill) {
-      cmtPill.style.cursor = 'pointer';
-      cmtPill.onclick = () => {
-        if (job.resultData) {
+    // Bấm vào cụm chỉ số cmt để mở modal
+    if (cmtCluster) {
+      cmtCluster.onclick = () => {
+        if (job.resultData && job.resultData.comments && job.resultData.comments.length > 0) {
           openCommentsModal(job);
         }
       };
     }
 
-    if (sentimentBtn) {
-      sentimentBtn.onclick = () => {
-        if (!job.resultData || !job.resultData.comments || job.resultData.comments.length === 0) {
-          queryTabDataAndExport(job, (data) => {
-            job.resultData = data;
-            runSentiment(job);
-          });
-        } else {
-          runSentiment(job);
+    // Bấm trực tiếp vào khối tóm tắt sắc thái AI để mở modal chi tiết bình luận
+    if (sentimentPillGroup) {
+      sentimentPillGroup.onclick = (e) => {
+        e.stopPropagation();
+        if (job.resultData && job.resultData.comments && job.resultData.comments.length > 0) {
+          openCommentsModal(job);
         }
       };
     }
 
+    // Bấm nút 🧠 AI Phân Tích
+    if (sentimentBtn) {
+      sentimentBtn.onclick = () => {
+        const origBtnContent = sentimentBtn.innerHTML;
+        sentimentBtn.innerHTML = '<span class="spinner-sm"></span><span>Đang phân tích...</span>';
+        sentimentBtn.disabled = true;
 
-    const copyUrlBtn = tr.querySelector('.btn-copy-url');
+        const sentBox = tr.querySelector(".sentiment-box");
+        if (sentBox) {
+          sentBox.innerHTML = '<span class="sentiment-analyzing"><span class="spinner-sm" style="border-top-color:#818cf8;"></span> Đang quét AI...</span>';
+        }
+
+        const handleComplete = () => {
+          runSentiment(job, () => {
+            sentimentBtn.disabled = false;
+          });
+        };
+
+        // 1. Dữ liệu đã có sẵn trong memory
+        if (job.resultData && job.resultData.comments && job.resultData.comments.length > 0) {
+          setTimeout(handleComplete, 80);
+          return;
+        }
+
+        // 2. Kiểm tra từ chrome.storage.local (khi cào xong tab đã đóng)
+        if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+          chrome.storage.local.get('fb_jobs', (st) => {
+            const list = st?.fb_jobs;
+            if (Array.isArray(list)) {
+              const found = list.find(x => x.id === job.id);
+              if (found && found.resultData && found.resultData.comments && found.resultData.comments.length > 0) {
+                job.resultData = found.resultData;
+                handleComplete();
+                return;
+              }
+            }
+
+            // 3. Fallback: Lấy trực tiếp từ tab đang mở nếu còn
+            if (job.tabId) {
+              queryTabDataAndExport(job, (data) => {
+                if (data && data.comments && data.comments.length > 0) {
+                  job.resultData = data;
+                  handleComplete();
+                } else {
+                  updateRowElement(job);
+                  sentimentBtn.innerHTML = origBtnContent;
+                  sentimentBtn.disabled = false;
+                }
+              });
+            } else {
+              updateRowElement(job);
+              sentimentBtn.innerHTML = origBtnContent;
+              sentimentBtn.disabled = false;
+            }
+          });
+        } else {
+          updateRowElement(job);
+          sentimentBtn.innerHTML = origBtnContent;
+          sentimentBtn.disabled = false;
+        }
+      };
+    }
+
+    const copyUrlBtn = tr.querySelector(".btn-copy-url");
     if (copyUrlBtn) {
       copyUrlBtn.onclick = (e) => {
         e.stopPropagation();
-        const urlToCopy = copyUrlBtn.getAttribute('data-url');
+        const urlToCopy = copyUrlBtn.getAttribute("data-url");
         navigator.clipboard.writeText(urlToCopy).then(() => {
-          copyUrlBtn.textContent = '✓ Copied';
-          setTimeout(() => { copyUrlBtn.textContent = '📋 Copy'; }, 1500);
+          copyUrlBtn.textContent = "✓";
+          setTimeout(() => { copyUrlBtn.textContent = "📋 Copy"; }, 1500);
         });
       };
     }
 
-    const csvBtn = tr.querySelector('.btn-csv');
-    const jsonBtn = tr.querySelector('.btn-json');
-    const viewBtn = tr.querySelector('.btn-view');
-    const stopBtn = tr.querySelector('.btn-stop');
-    const retryBtn = tr.querySelector('.btn-retry');
-    const deleteBtn = tr.querySelector('.btn-delete');
+    const csvBtn = tr.querySelector(".btn-csv");
+    const jsonBtn = tr.querySelector(".btn-json");
+    const viewBtn = tr.querySelector(".btn-view");
+    const stopBtn = tr.querySelector(".btn-stop");
+    const retryBtn = tr.querySelector(".btn-retry");
+    const deleteBtn = tr.querySelector(".btn-delete");
+    const loginRetryBtn = tr.querySelector(".btn-login-retry");
+
+    if (loginRetryBtn) {
+      loginRetryBtn.onclick = () => {
+        chrome.tabs.create({ url: "https://www.facebook.com", active: true });
+        chrome.runtime.sendMessage({ action: "RETRY_JOB", jobId: job.id });
+      };
+    }
 
     if (csvBtn) {
       csvBtn.onclick = () => {
         if (job.resultData) {
           Exporter.exportCSV(job.resultData);
         } else {
-          // If still running, query current tab data
           queryTabDataAndExport(job, (data) => Exporter.exportCSV(data));
         }
       };
@@ -603,41 +790,29 @@ const groupsContainer = document.getElementById('jobs-groups-container');
 
     if (viewBtn) {
       viewBtn.onclick = () => {
-        chrome.runtime.sendMessage({ action: 'OPEN_JOB_TAB', jobId: job.id });
+        chrome.runtime.sendMessage({ action: "OPEN_JOB_TAB", jobId: job.id });
       };
     }
 
     if (stopBtn) {
       stopBtn.onclick = () => {
-        chrome.runtime.sendMessage({ action: 'STOP_JOB', jobId: job.id });
+        chrome.runtime.sendMessage({ action: "STOP_JOB", jobId: job.id });
       };
     }
 
     if (retryBtn) {
       retryBtn.onclick = () => {
-        chrome.runtime.sendMessage({ action: 'RETRY_JOB', jobId: job.id });
+        chrome.runtime.sendMessage({ action: "RETRY_JOB", jobId: job.id });
       };
     }
 
     if (deleteBtn) {
       deleteBtn.onclick = () => {
-        if (confirm(`Bạn có chắc chắn muốn xóa job của bài viết "${job.progress?.postAuthor || job.url}"?`)) {
-          chrome.runtime.sendMessage({ action: 'DELETE_JOB', jobId: job.id }, () => {
-            jobsList = jobsList.filter(j => j.id !== job.id);
-            renderJobsTable();
-            updateMetrics();
-          });
-        }
-      };
-    }
-
-    const loginRetryBtn = tr.querySelector('.btn-login-retry');
-    if (loginRetryBtn) {
-      loginRetryBtn.onclick = () => {
-        chrome.tabs.create({ url: 'https://www.facebook.com', active: true });
-        setTimeout(() => {
-          chrome.runtime.sendMessage({ action: 'RETRY_JOB', jobId: job.id });
-        }, 1500);
+        chrome.runtime.sendMessage({ action: "DELETE_JOB", jobId: job.id });
+        jobsList = jobsList.filter(j => j.id !== job.id);
+        const row = document.getElementById(`row-${job.id}`);
+        if (row) row.remove();
+        updateMetrics();
       };
     }
   }
@@ -858,7 +1033,7 @@ const groupsContainer = document.getElementById('jobs-groups-container');
   const modalClose = document.getElementById('modal-close');
   const modalTitle = document.getElementById('modal-title');
   const modalCommentsList = document.getElementById('modal-comments-list');
-  const filterBtns = document.querySelectorAll('.filter-btn');
+  const filterBtns = document.querySelectorAll('.sentiment-tab-btn, .filter-btn');
   let currentModalData = [];
   let currentFilter = 'ALL';
 
@@ -950,21 +1125,23 @@ const groupsContainer = document.getElementById('jobs-groups-container');
     
     filtered.forEach(c => {
       const div = document.createElement('div');
-      div.style.background = '#ffffff';
-      div.style.padding = '12px 16px';
-      div.style.borderRadius = '8px';
-      div.style.border = '1px solid #e2e8f0';
+      div.style.background = 'rgba(30, 41, 59, 0.5)';
+      div.style.padding = '14px 18px';
+      div.style.borderRadius = '12px';
+      div.style.border = '1px solid rgba(255, 255, 255, 0.08)';
+      div.style.backdropFilter = 'blur(8px)';
       if (c.isReply) {
-        div.style.marginLeft = '28px';
-        div.style.borderLeft = '3px solid #cbd5e1';
+        div.style.marginLeft = '32px';
+        div.style.borderLeft = '3px solid #6366f1';
+        div.style.background = 'rgba(30, 41, 59, 0.35)';
       }
       
       const s = c.sentiment || 'NORMAL';
-      let sentimentBadge = '<span style="color: #64748b; font-size: 11px; background: #f1f5f9; padding: 2px 6px; border-radius: 4px;">😐 Bình thường</span>';
+      let sentimentBadge = '<span style="color: #94a3b8; font-size: 11px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1); padding: 3px 8px; border-radius: 20px;">😐 Bình thường</span>';
       if (s === 'POSITIVE') {
-        sentimentBadge = '<span style="color: #16a34a; font-size: 11px; background: #dcfce7; padding: 2px 6px; border-radius: 4px; font-weight: 600;">😊 Tích cực</span>';
+        sentimentBadge = '<span style="color: #34d399; font-size: 11px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); padding: 3px 8px; border-radius: 20px; font-weight: 700;">😊 Tích cực</span>';
       } else if (s === 'NEGATIVE') {
-        sentimentBadge = '<span style="color: #dc2626; font-size: 11px; background: #fee2e2; padding: 2px 6px; border-radius: 4px; font-weight: 600;">😡 Tiêu cực</span>';
+        sentimentBadge = '<span style="color: #f87171; font-size: 11px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.35); padding: 3px 8px; border-radius: 20px; font-weight: 700;">😡 Tiêu cực / Lái</span>';
       }
       
       const replyTo = c.isReply && c.parentAuthor ? `<span style="font-size: 11px; color: #94a3b8;">↳ Trả lời: ${c.parentAuthor}</span>` : '';
@@ -973,7 +1150,7 @@ const groupsContainer = document.getElementById('jobs-groups-container');
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
           <div>
             <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-weight: 700; color: #1e293b; font-size: 13px;">${c.author || 'Người dùng ẩn danh'}</span>
+              <span style="font-weight: 700; color: #ffffff; font-size: 13.5px; font-weight: 700;">${c.author || 'Người dùng ẩn danh'}</span>
               ${replyTo}
             </div>
             <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">
@@ -983,7 +1160,7 @@ const groupsContainer = document.getElementById('jobs-groups-container');
           </div>
           <div>${sentimentBadge}</div>
         </div>
-        <div style="font-size: 13px; color: #334155; line-height: 1.5; white-space: pre-wrap;">${c.text || '[Không có nội dung văn bản]'}</div>
+        <div style="font-size: 13px; color: #cbd5e1; line-height: 1.6; font-size: 13.5px; white-space: pre-wrap;">${c.text || '[Không có nội dung văn bản]'}</div>
       `;
       fragment.appendChild(div);
     });

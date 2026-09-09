@@ -735,6 +735,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
     }
 
+    case 'UPDATE_JOB_DATA': {
+      const job = jobs.get(message.jobId);
+      if (job) {
+        if (message.resultData) {
+          job.resultData = message.resultData;
+        }
+        broadcastJobUpdate(job);
+        persistJobs();
+        sendResponse({ success: true, job });
+      } else {
+        sendResponse({ success: false, error: 'Job not found' });
+      }
+      return true;
+    }
+
     case 'GET_ALL_JOBS': {
       sendResponse({
         success: true,

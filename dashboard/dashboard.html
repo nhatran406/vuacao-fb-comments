@@ -1,122 +1,220 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="vi" class="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FB Scraper Pro - Quản Lý & Cào Nhiều Bài Viết Đồng Thời</title>
+  <title>SocialPulse AI — Market & Social Intelligence Workspace</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
+  <!-- Ambient Mesh Background -->
+  <div class="mesh-canvas-background">
+    <div class="mesh-orb orb-1"></div>
+    <div class="mesh-orb orb-2"></div>
+    <div class="mesh-orb orb-3"></div>
+  </div>
+
   <div class="app-layout">
     <!-- Top Navigation Header -->
     <header class="app-header">
       <div class="header-left">
-        <div class="logo-icon">
-          <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/></svg>
+        <div class="brand-badge-wrapper">
+          <div class="logo-icon-ai">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+            </svg>
+          </div>
+          <div class="pulse-ring"></div>
         </div>
-        <div>
-          <h1 class="header-title">FB Scraper Pro - Multi-Job Manager</h1>
-          <p class="header-subtitle">Hệ thống quản lý và tự động cào bình luận nhiều bài viết Facebook đồng thời</p>
+        <div class="brand-text">
+          <div class="header-brand-title">
+            <span>SocialPulse</span>
+            <span class="ai-badge">AI 2.0</span>
+          </div>
+          <p class="header-subtitle">Neural Sentiment & Social Market Intelligence</p>
         </div>
       </div>
+
       <div class="header-right">
-        <button id="btn-fb-login" class="btn btn-outline-white" title="Mở Facebook để đăng nhập hoặc kiểm tra tài khoản">🔑 Đăng Nhập Facebook</button>
-        <button id="btn-export-all-csv" class="btn btn-outline-white">📊 Xuất Tất Cả Gộp (CSV)</button>
-        <button id="btn-refresh-all" class="btn btn-outline-white">🔄 Làm Mới</button>
+        <button id="btn-fb-login" class="nav-btn nav-btn-outline" title="Đăng nhập hoặc kiểm tra tài khoản Facebook">
+          <span class="nav-btn-icon">🔑</span>
+          <span>Facebook Session</span>
+        </button>
+        <button id="btn-export-all-csv" class="nav-btn nav-btn-glass" title="Xuất toàn bộ bài viết và bình luận sang CSV">
+          <span class="nav-btn-icon">📊</span>
+          <span>Export Master CSV</span>
+        </button>
+        <button id="btn-refresh-all" class="nav-btn nav-btn-primary" title="Làm mới trạng thái">
+          <span class="nav-btn-icon">🔄</span>
+          <span>Sync Realtime</span>
+        </button>
       </div>
     </header>
 
-    <!-- Main Container -->
+    <!-- Main Container: 2-Column Command Grid -->
     <main class="main-content">
-      <!-- Stats Overview Banner -->
+      <!-- Row 1: KPI Metric Banners -->
       <section class="stats-overview">
-        <div class="metric-card">
-          <div class="metric-icon bg-blue">📁</div>
-          <div class="metric-info">
-            <span class="metric-value" id="val-total-jobs">0</span>
-            <span class="metric-label">Tổng số bài viết (Jobs)</span>
+        <div class="metric-card card-glow-indigo">
+          <div class="metric-card-inner">
+            <div class="metric-header">
+              <span class="metric-label">TỔNG BÀI VIẾT</span>
+              <div class="metric-icon-badge icon-indigo">📁</div>
+            </div>
+            <div class="metric-value-wrapper">
+              <span class="metric-value" id="val-total-jobs">0</span>
+              <span class="metric-trend trend-neutral">Target Feed</span>
+            </div>
           </div>
+          <div class="card-edge-glow"></div>
         </div>
-        <div class="metric-card">
-          <div class="metric-icon bg-amber">⚡</div>
-          <div class="metric-info">
-            <span class="metric-value text-amber" id="val-running-jobs">0</span>
-            <span class="metric-label">Đang cào đồng thời</span>
+
+        <div class="metric-card card-glow-amber">
+          <div class="metric-card-inner">
+            <div class="metric-header">
+              <span class="metric-label">ĐANG CÀO SONG SONG</span>
+              <div class="metric-icon-badge icon-amber">⚡</div>
+            </div>
+            <div class="metric-value-wrapper">
+              <span class="metric-value text-amber" id="val-running-jobs">0</span>
+              <span class="metric-trend trend-amber">
+                <span class="radar-dot"></span> Live Scrape
+              </span>
+            </div>
           </div>
+          <div class="card-edge-glow"></div>
         </div>
-        <div class="metric-card">
-          <div class="metric-icon bg-green">✓</div>
-          <div class="metric-info">
-            <span class="metric-value text-green" id="val-completed-jobs">0</span>
-            <span class="metric-label">Đã cào hoàn tất</span>
+
+        <div class="metric-card card-glow-emerald">
+          <div class="metric-card-inner">
+            <div class="metric-header">
+              <span class="metric-label">ĐÃ HOÀN THÀNH</span>
+              <div class="metric-icon-badge icon-emerald">✓</div>
+            </div>
+            <div class="metric-value-wrapper">
+              <span class="metric-value text-emerald" id="val-completed-jobs">0</span>
+              <span class="metric-trend trend-emerald">100% Parsed</span>
+            </div>
           </div>
+          <div class="card-edge-glow"></div>
         </div>
-        <div class="metric-card">
-          <div class="metric-icon bg-purple">💬</div>
-          <div class="metric-info">
-            <span class="metric-value text-purple" id="val-total-comments-all">0</span>
-            <span class="metric-label">Tổng bình luận đã thu thập</span>
+
+        <div class="metric-card card-glow-purple">
+          <div class="metric-card-inner">
+            <div class="metric-header">
+              <span class="metric-label">TỔNG BÌNH LUẬN</span>
+              <div class="metric-icon-badge icon-purple">💬</div>
+            </div>
+            <div class="metric-value-wrapper">
+              <span class="metric-value text-purple" id="val-total-comments-all">0</span>
+              <span class="metric-trend trend-purple">Sentiment Ready</span>
+            </div>
           </div>
+          <div class="card-edge-glow"></div>
         </div>
       </section>
 
-      
-      <!-- Search & Extract Section -->
-      <section class="card add-job-card" style="border-top: 4px solid #10b981;">
-        <div class="card-header">
-          <h2>🔍 Search & Extract Posts</h2>
-          <span class="hint-text">Tự động tìm kiếm post theo từ khóa và đẩy vào danh sách cào</span>
-        </div>
-        <div class="card-body">
-          <div class="input-inline" style="display: flex; gap: 10px; width: 100%;">
-             <input type="text" id="input-search-keyword" placeholder="Ví dụ: Mã chứng khoán FPT, BĐS Vingroup..." style="flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 14px;">
-             <button id="btn-start-search" class="btn btn-primary" style="background-color: #10b981; border-color: #10b981;">
-               🔍 Tìm & Lấy Posts
-             </button>
+      <!-- Row 2: Two Column Ingestion Command Desk -->
+      <div class="command-grid-two-col">
+        <!-- Left Col: Neural Search Discovery -->
+        <section class="glass-panel panel-search">
+          <div class="panel-header">
+            <div class="panel-header-title">
+              <span class="panel-icon">⚡</span>
+              <h3>Neural Social Search</h3>
+              <span class="panel-pill">Smart Radar</span>
+            </div>
+            <p class="panel-desc">Tự động tìm bài viết theo mã cổ phiếu hoặc từ khóa và lập tức cào dữ liệu</p>
           </div>
-          <p id="search-status-text" style="margin-top: 10px; font-size: 13px; color: #64748b; font-weight: 500;"></p>
-        </div>
-      </section>
+          <div class="panel-body">
+            <div class="search-command-bar">
+              <div class="search-input-wrapper">
+                <svg class="search-lens" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="input-search-keyword" placeholder="Mã cổ phiếu hoặc từ khóa (Ví dụ: FPT, HPG, VHM)..." autocomplete="off">
+              </div>
+              <button id="btn-start-search" class="action-btn action-btn-ai">
+                <span class="btn-sparkle">✨</span>
+                <span>Tìm & Quét</span>
+              </button>
+            </div>
+            <div class="search-feedback-wrapper">
+              <p id="search-status-text" class="status-indicator-text"></p>
+            </div>
+          </div>
+        </section>
 
-      <!-- Create New Jobs Box -->
-      <section class="card add-job-card">
-        <div class="card-header">
-          <h2>➕ Thêm Bài Viết Mới Cần Cào</h2>
-          <span class="hint-text">Dán 1 link hoặc nhiều link cùng lúc (mỗi link trên 1 dòng)</span>
+        <!-- Right Col: Direct URL Ingestion -->
+        <section class="glass-panel panel-batch">
+          <div class="panel-header">
+            <div class="panel-header-title">
+              <span class="panel-icon">🔗</span>
+              <h3>Direct URL Ingestion</h3>
+              <span class="panel-pill">Multi-Line Input</span>
+            </div>
+            <p class="panel-desc">Dán trực tiếp các đường link bài viết Facebook (mỗi link 1 dòng)</p>
+          </div>
+          <div class="panel-body">
+            <div class="editor-terminal-wrapper">
+              <textarea id="input-batch-urls" placeholder="Dán danh sách link bài viết Facebook vào đây...&#10;https://www.facebook.com/.../posts/...&#10;https://www.facebook.com/groups/.../posts/..."></textarea>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Row 3: Scraper Execution & Parameters Control Deck -->
+      <section class="glass-panel panel-controls">
+        <div class="panel-header flex-between">
+          <div class="panel-header-title">
+            <span class="panel-icon">⚙️</span>
+            <h3>Execution Parameters & Concurrency Engine</h3>
+            <span class="panel-pill">50-Thread Turbo Mode</span>
+          </div>
+          <div class="param-submit-cell">
+            <button id="btn-submit-jobs" class="action-btn action-btn-fire">
+              <span>🚀 Khởi Chạy Cào Dữ Liệu</span>
+            </button>
+          </div>
         </div>
-        <div class="card-body">
-          <textarea id="input-batch-urls" placeholder="Dán các đường link bài viết Facebook vào đây...&#10;Ví dụ:&#10;https://www.facebook.com/vietstock.vn/posts/...&#10;https://www.facebook.com/.../posts/..."></textarea>
-          
-          <div class="config-bar">
-            <div class="config-group">
-              <label class="checkbox-label">
+        <div class="panel-body">
+          <div class="controls-matrix">
+            <div class="control-row options-toggles">
+              <label class="custom-toggle">
                 <input type="checkbox" id="cfg-job-replies" checked>
-                <span>Mở rộng phản hồi (sub-comments)</span>
+                <span class="toggle-track"></span>
+                <span class="toggle-text">Cào phản hồi lồng nhau (Sub-comments)</span>
               </label>
-              <label class="checkbox-label">
+
+              <label class="custom-toggle">
                 <input type="checkbox" id="cfg-job-filter" checked>
-                <span>Tự chọn "Tất cả bình luận"</span>
+                <span class="toggle-track"></span>
+                <span class="toggle-text">Tự chọn bộ lọc "Tất cả bình luận"</span>
               </label>
-              <label class="checkbox-label" title="Tự động đóng tab bài viết khi cào xong để giải phóng RAM cho máy">
+
+              <label class="custom-toggle">
                 <input type="checkbox" id="cfg-job-autoclose" checked>
-                <span style="color: #059669; font-weight: 600;">⚡ Tự đóng tab khi xong (Tiết kiệm RAM)</span>
+                <span class="toggle-track"></span>
+                <span class="toggle-text text-emerald-glow">⚡ Tự đóng tab khi xong (Save RAM)</span>
               </label>
             </div>
-            
-            <div class="config-group-inputs">
-              <div class="input-inline">
-                <label for="cfg-job-window-mode" style="font-weight: 700; color: #1877f2;">Chế độ cào:</label>
-                <select id="cfg-job-window-mode" style="font-weight: 600; border-color: #1877f2; background: #f0f7ff;">
-                  <option value="smart_background" selected>🤫 Tab ngầm thông minh (Không đảo tab – Khuyên dùng)</option>
-                  <option value="tabs_rotate">🌐 Đảo Tab (Nhảy tab mỗi vài giây – Chắc chắn nhất)</option>
-                  <option value="background_tab">💤 Tab ngầm thuần (Không đảo, không unthrottle)</option>
-                  <option value="single_worker">🗂️ Cửa sổ riêng (Tách cửa sổ phụ chứa các tab)</option>
+
+            <div class="control-row parameters-row">
+              <div class="param-box">
+                <span class="param-label">CRAWL MODE</span>
+                <select id="cfg-job-window-mode" class="param-select">
+                  <option value="smart_background" selected>🤫 Tab ngầm thông minh (Không đảo tab)</option>
+                  <option value="tabs_rotate">🌐 Đảo Tab (Nhảy tab luân phiên)</option>
+                  <option value="background_tab">💤 Tab ngầm thuần</option>
+                  <option value="single_worker">🗂️ Cửa sổ riêng</option>
                 </select>
               </div>
-              <div class="input-inline">
-                <label for="cfg-job-concurrency" style="font-weight: 700; color: #1877f2;">Số luồng đồng thời:</label>
-                <select id="cfg-job-concurrency" style="font-weight: 600; border-color: #1877f2; background: #f0f7ff;">
-                  <option value="50" selected>🚀 50 bài cùng lúc (Mega Turbo 50 Posts)</option>
+
+              <div class="param-box">
+                <span class="param-label">CONCURRENCY</span>
+                <select id="cfg-job-concurrency" class="param-select highlight-select">
+                  <option value="50" selected>🚀 50 bài song song (Mega Turbo)</option>
                   <option value="999">⚡ Tất cả cùng lúc (Không giới hạn)</option>
                   <option value="30">⚡ 30 bài đồng thời</option>
                   <option value="20">⚡ 20 bài đồng thời</option>
@@ -125,9 +223,10 @@
                   <option value="1">⏳ 1 bài tuần tự</option>
                 </select>
               </div>
-              <div class="input-inline">
-                <label for="cfg-job-speed">Tốc độ đệm:</label>
-                <select id="cfg-job-speed">
+
+              <div class="param-box">
+                <span class="param-label">BUFFER SPEED</span>
+                <select id="cfg-job-speed" class="param-select">
                   <option value="300" selected>⚡ Siêu tốc - Turbo (300ms)</option>
                   <option value="500">⚡ Cực nhanh (500ms)</option>
                   <option value="800">Nhanh (800ms)</option>
@@ -135,40 +234,41 @@
                   <option value="1800">An toàn (1800ms)</option>
                 </select>
               </div>
-              <div class="input-inline">
-                <label for="cfg-job-max">Giới hạn cmt:</label>
-                <input type="number" id="cfg-job-max" value="0" min="0" step="50" title="0 = không giới hạn" style="width: 70px;">
+
+              <div class="param-box">
+                <span class="param-label">MAX COMMENTS</span>
+                <input type="number" id="cfg-job-max" value="0" min="0" step="50" class="param-input" placeholder="0 = all">
               </div>
             </div>
-
-            <button id="btn-submit-jobs" class="btn btn-primary">
-              🚀 Tạo Jobs & Bắt Đầu Cào Ngay
-            </button>
           </div>
         </div>
       </section>
 
-      <!-- Jobs Management List -->
-      <section class="card jobs-list-card">
-        <div class="card-header flex-between">
-          <div class="flex-align-center gap-12">
-            <h2>📋 Danh Sách Jobs Đang Chạy & Đã Thu Thập</h2>
-            <span class="badge badge-secondary" id="badge-jobs-count">0 jobs</span>
+      <!-- Row 4: Active Clusters & Tasks List -->
+      <section class="glass-panel panel-stream">
+        <div class="panel-header flex-between">
+          <div class="panel-header-title">
+            <span class="panel-icon">📋</span>
+            <h3>Realtime Job Clusters</h3>
+            <span class="badge-pill" id="badge-jobs-count">0 jobs</span>
           </div>
-          <div class="flex-align-center gap-8">
-            <input type="text" id="search-jobs-input" placeholder="Tìm theo tác giả, URL..." class="search-input">
-            <button id="btn-stop-all" class="btn btn-warning-sm">⏹ Dừng Tất Cả</button>
-            <button id="btn-clear-completed" class="btn btn-outline-danger-sm">🗑 Xóa Hoàn Tất</button>
+          <div class="stream-actions-toolbar">
+            <div class="stream-search-wrapper">
+              <input type="text" id="search-jobs-input" placeholder="Lọc theo tác giả, URL..." class="search-mini-input">
+            </div>
+            <button id="btn-stop-all" class="toolbar-btn btn-warning">⏹ Dừng Tất Cả</button>
+            <button id="btn-clear-completed" class="toolbar-btn btn-danger">🗑 Dọn Dẹp Đã Xong</button>
           </div>
         </div>
 
-        <div class="card-body no-padding">
+        <div class="panel-body no-padding">
           <div class="jobs-groups-container" id="jobs-groups-container">
-            <!-- Dynamically populated groups -->
-            <div class="empty-state" id="empty-state-row" style="padding: 40px; text-align: center;">
-              <div class="empty-icon">📭</div>
-              <h3>Chưa có Group nào được tạo</h3>
-              <p>Dán link bài viết Facebook hoặc tìm kiếm ở trên và nhấn <strong>"Tạo Jobs & Bắt Đầu Cào Ngay"</strong>.</p>
+            <div class="empty-state-card" id="empty-state-row">
+              <div class="empty-halo">
+                <div class="empty-icon-ai">🌌</div>
+              </div>
+              <h4 class="empty-title">Chưa có Task hoặc Group nào trong phiên</h4>
+              <p class="empty-hint">Dán danh sách liên kết bài viết hoặc nhập từ khóa tìm kiếm phía trên để hệ thống bắt đầu cào.</p>
             </div>
           </div>
         </div>
@@ -176,30 +276,49 @@
     </main>
   </div>
 
-  <script src="../utils/exporter.js"></script>
-  <script src="../utils/sentiment-analyzer.js"></script>
-  <script src="dashboard.js"></script>
+  <!-- Comments Detail Modal (AI Sentiment Deep Dive) -->
+  <div id="comments-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-card-header">
+        <div class="modal-title-group">
+          <span class="modal-sparkle">🧠</span>
+          <div>
+            <h3 id="modal-title" class="modal-heading">Chi tiết phân tích bình luận</h3>
+            <span class="modal-sub">Sentiment Analysis & Classification Breakdown</span>
+          </div>
+        </div>
+        <button id="modal-close" class="modal-close-icon">✕</button>
+      </div>
 
-  <!-- Comments Detail Modal -->
-  <div id="comments-modal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 9999; justify-content: center; align-items: center;">
-    <div class="modal-container" style="background: #ffffff; width: 850px; max-width: 95%; max-height: 85vh; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);">
-      <div class="modal-header" style="padding: 16px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: #f8fafc;">
-        <h2 id="modal-title" style="font-size: 16px; font-weight: 700; color: #1e293b; margin: 0;">Chi tiết bình luận</h2>
-        <button id="modal-close" class="btn-close-modal" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b;">✕</button>
+      <div class="modal-sentiment-tabs">
+        <button class="sentiment-tab-btn active" data-filter="ALL">
+          <span>Tất cả</span>
+          <span class="tab-count-pill" id="count-all">0</span>
+        </button>
+        <button class="sentiment-tab-btn tab-positive" data-filter="POSITIVE">
+          <span>😊 Tích cực</span>
+          <span class="tab-count-pill" id="count-positive">0</span>
+        </button>
+        <button class="sentiment-tab-btn tab-negative" data-filter="NEGATIVE">
+          <span>😡 Tiêu cực / Lái</span>
+          <span class="tab-count-pill" id="count-negative">0</span>
+        </button>
+        <button class="sentiment-tab-btn tab-normal" data-filter="NORMAL">
+          <span>😐 Bình thường</span>
+          <span class="tab-count-pill" id="count-normal">0</span>
+        </button>
       </div>
-      <div class="modal-filters" style="padding: 12px 20px; border-bottom: 1px solid #e2e8f0; display: flex; gap: 10px; background: #ffffff;">
-        <button class="filter-btn active" data-filter="ALL" style="padding: 6px 14px; border-radius: 20px; border: 1px solid #cbd5e1; background: #f1f5f9; font-size: 13px; font-weight: 600; cursor: pointer;">Tất cả (<span id="count-all">0</span>)</button>
-        <button class="filter-btn" data-filter="POSITIVE" style="padding: 6px 14px; border-radius: 20px; border: 1px solid #16a34a; background: #ffffff; color: #16a34a; font-size: 13px; font-weight: 600; cursor: pointer;">😊 Tích cực (<span id="count-positive">0</span>)</button>
-        <button class="filter-btn" data-filter="NEGATIVE" style="padding: 6px 14px; border-radius: 20px; border: 1px solid #dc2626; background: #ffffff; color: #dc2626; font-size: 13px; font-weight: 600; cursor: pointer;">😡 Tiêu cực / Lái (<span id="count-negative">0</span>)</button>
-        <button class="filter-btn" data-filter="NORMAL" style="padding: 6px 14px; border-radius: 20px; border: 1px solid #64748b; background: #ffffff; color: #64748b; font-size: 13px; font-weight: 600; cursor: pointer;">😐 Bình thường (<span id="count-normal">0</span>)</button>
-      </div>
-      <div class="modal-body" style="padding: 20px; overflow-y: auto; flex: 1; background: #f8fafc;">
-        <div id="modal-comments-list" class="comments-list" style="display: flex; flex-direction: column; gap: 12px;">
-          <!-- Comments render here -->
+
+      <div class="modal-card-body">
+        <div id="modal-comments-list" class="comments-stream-container">
+          <!-- Comments render dynamically -->
         </div>
       </div>
     </div>
   </div>
 
+  <script src="../utils/exporter.js"></script>
+  <script src="../utils/sentiment-analyzer.js"></script>
+  <script src="dashboard.js"></script>
 </body>
 </html>
