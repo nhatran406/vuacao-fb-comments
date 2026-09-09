@@ -37,9 +37,12 @@ function persistJobs() {
         // Do not store huge payloads in memory index if too big
         return {
           id: j.id,
+          groupId: j.groupId || 'group_standalone',
           url: j.url,
           status: j.status,
           createdAt: j.createdAt,
+          startedAt: j.startedAt,
+          completedAt: j.completedAt,
           config: j.config,
           progress: j.progress,
           resultData: j.resultData
@@ -68,6 +71,7 @@ function createJobRecord(url, customConfig = {}) {
 
   const job = {
     id: jobId,
+    groupId: customConfig.groupId || 'group_standalone',
     url: url.trim(),
     status: 'STARTING',
     createdAt: new Date().toISOString(),
@@ -146,6 +150,7 @@ function enqueueJob(job) {
   if (runningJobIds.size < maxConcurrentLimit) {
     runningJobIds.add(job.id);
     job.status = 'STARTING';
+    if (!job.startedAt) job.startedAt = Date.now();
     job.progress.statusMessage = 'Đang mở tab bài viết...';
     broadcastJobUpdate(job);
     persistJobs();
@@ -201,6 +206,7 @@ function setupJobTab(job, tabId) {
     // Wait 2s for Facebook scripts to initialize
     setTimeout(() => {
       job.status = 'RUNNING';
+    if (!job.startedAt) job.startedAt = Date.now();
       job.progress.statusMessage = 'Đang phân tích bài viết và bắt đầu cào...';
       broadcastJobUpdate(job);
 
@@ -291,7 +297,6 @@ async function getOrCreateWorkerWindow(initialUrl) {
   workerWindowPromise = new Promise((resolve) => {
     chrome.windows.create({
       url: initialUrl || 'about:blank',
-      populate: true,
       focused: false,
       width: 1050,
       height: 850,
@@ -306,7 +311,14 @@ async function getOrCreateWorkerWindow(initialUrl) {
         resolve(null);
       } else {
         workerWindowId = win.id;
-        resolve(win);
+        // Make sure we have tabs populated
+        if (!win.tabs) {
+          chrome.windows.get(win.id, { populate: true }, (populatedWin) => {
+            resolve(populatedWin || win);
+          });
+        } else {
+          resolve(win);
+        }
       }
     });
   });
@@ -485,9 +497,10 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   const jobId = tabToJobMap.get(tabId);
   if (jobId && jobs.has(jobId)) {
     const job = jobs.get(jobId);
+    // Chỉ đánh dấu STOPPED nếu tab bị đóng BẤT THƯỜNG khi chưa cào xong (COMPLETED)
     if (job.status === 'RUNNING' || job.status === 'STARTING') {
       job.status = 'STOPPED';
-      job.progress.statusMessage = 'Tab đã bị đóng.';
+      job.progress.statusMessage = 'Người dùng đóng tab hoặc tab bị tắt.';
       broadcastJobUpdate(job);
       persistJobs();
       onJobFinished(job.id);
@@ -527,6 +540,152 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   switch (message.action) {
+
+    case 'START_FB_SEARCH': {
+      const { keyword } = message;
+      if (!keyword) {
+        sendResponse({ success: false, error: 'Thiếu từ khóa' });
+        return;
+      }
+
+      const searchUrl = `https://www.facebook.com/search/posts?q=${encodeURIComponent(keyword)}`;
+
+      // Mở tab thật để Facebook không throttle / không bị lỗi không có dữ liệu
+      chrome.tabs.create({ url: searchUrl, active: true }, (newTab) => {
+        const tabId = newTab.id;
+
+        const checkTabLoaded = (tId, changeInfo) => {
+          if (tId === tabId && changeInfo.status === 'complete') {
+            chrome.tabs.onUpdated.removeListener(checkTabLoaded);
+
+            // Đợi 2 giây cho DOM ban đầu nạp xong, rồi chạy script cuộn và lấy link
+            setTimeout(() => {
+              chrome.scripting.executeScript({
+                target: { tabId: tabId },
+                func: async () => {
+                  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+                  function getCleanPostUrl(href) {
+                    if (!href) return null;
+                    const blacklist = [
+                      "/login_alerts/", "/checkpoint/", "/notifications", "/settings/", "/help/",
+                      "/messages/", "/friends/", "/marketplace/", "/gaming/", "/saved/", "/ads/",
+                      "login.php", "/search/"
+                    ];
+                    for (const b of blacklist) {
+                      if (href.includes(b)) return null;
+                    }
+                    if (href.includes("comment_id=") || href.includes("reply_comment_id=")) return null;
+
+                    try {
+                      const urlObj = new URL(href);
+                      const pathname = urlObj.pathname;
+
+                      // TUYỆT ĐỐI KHÔNG LẤY LINK /photo/ vì là ảnh lẻ ("This photo is from a post")
+                      if (pathname.includes("/photo")) {
+                        const setParam = urlObj.searchParams.get("set") || "";
+                        const vanity = urlObj.searchParams.get("idorvanity") || "";
+                        if (setParam.startsWith("gm.") && vanity) {
+                          return "https://www.facebook.com/groups/" + vanity + "/posts/" + setParam.replace("gm.", "") + "/";
+                        }
+                        if (setParam.startsWith("pcb.") && vanity) {
+                          return "https://www.facebook.com/groups/" + vanity + "/posts/" + setParam.replace("pcb.", "") + "/";
+                        }
+                        return null; // Bỏ qua ảnh lẻ
+                      }
+
+                      if (pathname.includes("/watch") && urlObj.searchParams.has("v")) {
+                        const vid = urlObj.searchParams.get("v");
+                        if (vid && /^\d+$/.test(vid)) return "https://www.facebook.com/watch/?v=" + vid;
+                      }
+
+                      const videoMatch = pathname.match(/\/videos\/(\d+)/i);
+                      if (videoMatch) return "https://www.facebook.com/watch/?v=" + videoMatch[1];
+
+                      const postMatch = pathname.match(/\/posts\/([a-zA-Z0-9_]+)/i);
+                      if (postMatch) return urlObj.origin + pathname.split("?")[0];
+
+                      const groupMatch = pathname.match(/\/groups\/[^\/]+\/(posts|permalink)\/(\d+)/i);
+                      if (groupMatch) return urlObj.origin + pathname.split("?")[0];
+
+                      if (pathname.includes("story.php") || pathname.includes("permalink.php")) {
+                        const fbid = urlObj.searchParams.get("story_fbid") || urlObj.searchParams.get("fbid") || urlObj.searchParams.get("id");
+                        if (fbid) return href;
+                      }
+
+                      const reelMatch = pathname.match(/\/reel\/(\d+)/i);
+                      if (reelMatch) return "https://www.facebook.com/reel/" + reelMatch[1];
+                    } catch (e) {
+                      return null;
+                    }
+
+                    return null;
+                  }
+
+                  const postUrls = new Set();
+
+                  for (let i = 0; i < 4; i++) {
+                    window.scrollTo(0, document.body.scrollHeight);
+                    await sleep(1500);
+
+                    // Ưu tiên quét feed units lấy link timestamp của bài post
+                    const feedUnits = Array.from(document.querySelectorAll("div[role=\"feed\"] > div, div[data-pagelet^=\"FeedUnit\"], div[role=\"article\"]"));
+                    feedUnits.forEach(unit => {
+                      const links = Array.from(unit.querySelectorAll("a[role=\"link\"]"));
+                      for (const a of links) {
+                        const href = a.href || "";
+                        const text = (a.innerText || a.textContent || "").trim();
+                        const isTime = /^(\d+\s*[hmdwy]|vừa xong|hôm qua|tháng|yesterday|just now)/i.test(text);
+                        if (isTime || href.includes("/posts/") || href.includes("/permalink/")) {
+                          const clean = getCleanPostUrl(href);
+                          if (clean) {
+                            postUrls.add(clean);
+                            break;
+                          }
+                        }
+                      }
+                    });
+
+                    const links = Array.from(document.querySelectorAll("a[role=\"link\"], a"));
+                    links.forEach(a => {
+                      const href = a.href || "";
+                      const cleanUrl = getCleanPostUrl(href);
+                      if (cleanUrl) {
+                        postUrls.add(cleanUrl);
+                      }
+                    });
+                  }
+
+                  return Array.from(postUrls);
+                }              }, (results) => {
+                // Tự động đóng tab tìm kiếm lại
+                chrome.tabs.remove(tabId);
+
+                if (chrome.runtime.lastError || !results || !results[0] || !results[0].result) {
+                  chrome.runtime.sendMessage({
+                    action: 'FB_SEARCH_FINISHED',
+                    success: false,
+                    error: chrome.runtime.lastError ? chrome.runtime.lastError.message : 'Không nhận được bài viết'
+                  });
+                } else {
+                  chrome.runtime.sendMessage({
+                    action: 'FB_SEARCH_FINISHED',
+                    success: true,
+                    urls: results[0].result
+                  });
+                }
+              });
+            }, 2000);
+          }
+        };
+
+        chrome.tabs.onUpdated.addListener(checkTabLoaded);
+      });
+
+      sendResponse({ success: true });
+      break;
+    }
+
     case 'REGISTER_DASHBOARD': {
       if (message.windowId) lastDashboardWindowId = message.windowId;
       if (message.tabId) lastDashboardTabId = message.tabId;
@@ -549,6 +708,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case 'CREATE_BATCH_JOBS': {
       const urls = message.urls || [];
       const concurrency = parseInt(message.concurrency || message.config?.concurrency, 10);
+      const batchGroupId = 'group_' + Date.now();
+      if (message.config) message.config.groupId = batchGroupId;
       if (!isNaN(concurrency) && concurrency > 0) {
         setMaxConcurrency(concurrency);
       }
@@ -638,6 +799,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const job = jobs.get(message.jobId);
       if (job) {
         job.status = 'STARTING';
+    if (!job.startedAt) job.startedAt = Date.now();
         job.progress.statusMessage = 'Đang xếp hàng để cào lại...';
         job.progress.totalComments = 0;
         job.progress.totalTopLevel = 0;
@@ -700,6 +862,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const job = jobs.get(message.jobId);
       if (job) {
         job.status = 'COMPLETED';
+        job.completedAt = Date.now();
         job.resultData = message.data;
         if (message.data?.stats?.expectedComments) job.progress.expectedComments = message.data.stats.expectedComments;
         const totalGot = message.data?.stats?.totalComments || 0;
@@ -719,20 +882,33 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         persistJobs();
         onJobFinished(job.id);
 
-        // Auto-close mini worker window or tab immediately (400ms flush buffer)
-        const closeWinId = job.windowId;
+        // An toàn: Chỉ đóng tab của bài viết vừa cào xong để tiết kiệm RAM.
+        // Tuyệt đối không đóng toàn bộ cửa sổ (window) nếu còn các tab khác đang chạy hoặc còn Dashboard.
         const closeTabId = job.tabId;
+        const closeWinId = job.windowId;
         job.windowId = null;
 
-        const shouldClose = (closeWinId || job.config?.autoCloseTab !== false);
-        if (shouldClose) {
-          setTimeout(() => {
-            if (closeWinId) {
-              chrome.windows.remove(closeWinId).catch(() => {});
-            } else if (closeTabId) {
-              chrome.tabs.remove(closeTabId).catch(() => {});
+        if (job.config?.autoCloseTab !== false && closeTabId) {
+          setTimeout(async () => {
+            try {
+              if (closeWinId) {
+                // Kiểm tra xem cửa sổ phụ đó còn bao nhiêu tab
+                const win = await chrome.windows.get(closeWinId, { populate: true }).catch(() => null);
+                if (win && win.tabs && win.tabs.length > 1) {
+                  // Vẫn còn nhiều tab khác trong cửa sổ: Chỉ đóng đúng tab này thôi!
+                  chrome.tabs.remove(closeTabId).catch(() => {});
+                } else if (win && win.tabs && win.tabs.length <= 1) {
+                  // Chỉ còn đúng 1 tab cuối cùng thì mới đóng cửa sổ phụ
+                  chrome.windows.remove(closeWinId).catch(() => {});
+                }
+              } else {
+                // Chế độ tab thông thường: chỉ đóng tab đó
+                chrome.tabs.remove(closeTabId).catch(() => {});
+              }
+            } catch (e) {
+              console.warn('[Job Manager] Lỗi khi đóng tab:', e);
             }
-          }, 400);
+          }, 500);
         }
       }
       sendResponse({ received: true });

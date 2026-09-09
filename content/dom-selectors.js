@@ -140,6 +140,13 @@ const FBDomSelectors = {
    */
   getPostContainer() {
     this.dismissLoginOverlayIfAny();
+
+    // Special check for photo view (theater mode)
+    if (window.location.pathname.includes('/photo')) {
+      const sidebar = document.querySelector('div[role="complementary"], form, div[data-pagelet*="PhotoViewerSidePane"], div[data-pagelet*="Comments"]');
+      if (sidebar) return sidebar;
+    }
+
     const dialogs = Array.from(document.querySelectorAll('div[role="dialog"]'));
     for (const modal of dialogs) {
       if (modal.id === 'fb-scraper-hud-root') continue;
@@ -156,6 +163,13 @@ const FBDomSelectors = {
    */
   getCommentsScope() {
     this.dismissLoginOverlayIfAny();
+
+    // Special check for photo view (theater mode)
+    if (window.location.pathname.includes('/photo')) {
+      const sidebar = document.querySelector('div[role="complementary"], form, div[data-pagelet*="PhotoViewerSidePane"], div[data-pagelet*="Comments"]');
+      if (sidebar) return sidebar;
+    }
+
     const dialogs = Array.from(document.querySelectorAll('div[role="dialog"]'));
     for (const d of dialogs) {
       if (d.id === 'fb-scraper-hud-root') continue;
@@ -174,6 +188,20 @@ const FBDomSelectors = {
    * Find the scrollable container for comments
    */
   getScrollableContainer() {
+
+    if (window.location.pathname.includes('/photo')) {
+      const pane = document.querySelector('div[role="complementary"], div[data-pagelet*="PhotoViewerSidePane"]');
+      if (pane) {
+        const divs = Array.from(pane.querySelectorAll('div'));
+        for (const d of divs) {
+          if (d.scrollHeight > d.clientHeight + 40) {
+            return d;
+          }
+        }
+        return pane;
+      }
+    }
+
     const scope = this.getCommentsScope();
     if (scope && scope !== document.body) {
       const allDivs = Array.from(scope.querySelectorAll('div'));
